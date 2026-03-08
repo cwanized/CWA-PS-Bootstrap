@@ -158,6 +158,7 @@ repo-root
 `bootstrap.ps1` übernimmt:
 
 - Vorbedingungen prüfen
+- Remote-Loader für `irm | iex` bereitstellen
 - Bootstrap-PowerShell-Module sicherstellen
 - Repository beschaffen oder aktualisieren
 - Modul laden
@@ -204,20 +205,22 @@ PowerShell-Repositories und PowerShell-Module bilden eine eigene Konfigurationsd
 Vorgeschlagener logischer Ablauf:
 
 1. PowerShell-Version prüfen
-2. benötigte Basiswerkzeuge prüfen
-3. Zielrepository klonen oder aktualisieren
-4. Bootstrap-PowerShell-Module installieren
-5. Modul laden
-6. Profil bestimmen
-7. Kategorien auflösen
-8. PowerShell-Repositories und optionale PowerShell-Module auflösen
-9. Installer-Quellen und Shell-Konfiguration auflösen
-10. `winget`-Definitionen an `winget DSC` übergeben
-11. ergänzende Quellen über Hüllen vorbereiten oder ausführen
-12. Konfiguration validieren
-13. Sollzustand berechnen
-14. `Report` oder `Enforce` ausführen
-15. Ergebnis loggen und Exitcode setzen
+2. Remote-Loader per `irm | iex` laden
+3. benötigte Basiswerkzeuge prüfen
+4. Zielrepository klonen oder aktualisieren
+5. GitHub-Authentifizierung bei Bedarf über Git Credential Manager durchführen
+6. Bootstrap-PowerShell-Module installieren
+7. Modul laden
+8. Profil bestimmen
+9. Kategorien auflösen
+10. PowerShell-Repositories und optionale PowerShell-Module auflösen
+11. Installer-Quellen und Shell-Konfiguration auflösen
+12. `winget`-Definitionen an `winget DSC` übergeben
+13. ergänzende Quellen über Hüllen vorbereiten oder ausführen
+14. Konfiguration validieren
+15. Sollzustand berechnen
+16. `Report` oder `Enforce` ausführen
+17. Ergebnis loggen und Exitcode setzen
 
 ### 6.2 Betriebsmodi
 

@@ -69,18 +69,23 @@ Die Lösung arbeitet in zwei Modi:
 Der Benutzer startet das Setup mit einem einzigen Befehl:
 
 ``` powershell
-irm https://example/bootstrap.ps1 | iex
+irm https://raw.githubusercontent.com/cwanized/CWA-PS-Bootstrap/master/bootstrap.ps1 | iex
 ```
+
+Der Einzeiler lädt einen kleinen Bootstrap-Loader. Dieser Loader prüft
+die Grundvoraussetzungen, klont anschließend das Repository lokal und
+startet danach den eigentlichen Bootstrap aus dem Checkout.
 
 Das Bootstrap-Skript übernimmt:
 
-1.  Installation grundlegender Tools
-2.  Installation der für den Bootstrap benötigten PowerShell-Module
+1.  Laden eines kleinen Bootstrap-Loaders
+2.  Prüfung grundlegender Tools
 3.  Authentifizierung am Git-Repository
-4.  Klonen des Repositories
-5.  Laden des PowerShell-Moduls
-6.  Aufruf des Client-Setups
-7.  Nutzung von `winget DSC` für passende Paketdefinitionen
+4.  Klonen oder Aktualisieren des Repositories
+5.  Installation der für den Bootstrap benötigten PowerShell-Module
+6.  Laden des PowerShell-Moduls
+7.  Aufruf des Client-Setups
+8.  Nutzung von `winget DSC` für passende Paketdefinitionen
 
 ------------------------------------------------------------------------
 
@@ -94,7 +99,7 @@ Ablauf:
 1.  `git clone` wird gestartet
 2.  Git Credential Manager erkennt fehlende Credentials
 3.  Ein Browser wird automatisch geöffnet
-4.  Benutzer authentifiziert sich bei GitLab
+4.  Benutzer authentifiziert sich bei GitHub
 5.  Token wird im Windows Credential Store gespeichert
 
 Unterstützte Authentifizierungsarten:
@@ -493,7 +498,7 @@ Diese Konfigurationen werden während des Setup-Prozesses angewendet.
   WinGet DSC               Deklarative Paketinstallation für Winget-Pakete
   Oh My Posh               Shell-Prompt und Profil-Darstellung
   Git                      Versionskontrolle
-  GitLab                   Repository Hosting
+  GitHub                   Repository Hosting
   Git Credential Manager   Authentifizierung
   Winget                   Paketinstallation
   Chocolatey               Erweiterte Paketinstallation
