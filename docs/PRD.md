@@ -47,6 +47,7 @@ Die Lösung arbeitet in zwei Modi:
 -   Bevorzugte Nutzung von `winget DSC` für deklarative Paketverwaltung
 -   Einrichtung eines standardisierten PowerShell-Profils
 -   Einrichtung einer standardisierten Oh-My-Posh Shell-Darstellung
+-   Automatische Installation der für den Bootstrap benötigten PowerShell-Module
 
 ### Secondary Goals
 
@@ -56,6 +57,8 @@ Die Lösung arbeitet in zwei Modi:
 -   Modularisierung von Konfiguration und Logik
 -   Kategoriespezifische Shell-Profile für unterschiedliche Arbeitskontexte
 -   Konzeptionelle Vorbereitung von `choco`, `msi` und `exe` als ergänzende Hüllen
+-   Optionale Installation zusätzlicher PowerShell-Module über Kategorien
+-   Deklarative Verwaltung vertrauenswürdiger PowerShell-Repositories
 
 ------------------------------------------------------------------------
 
@@ -72,11 +75,12 @@ irm https://example/bootstrap.ps1 | iex
 Das Bootstrap-Skript übernimmt:
 
 1.  Installation grundlegender Tools
-2.  Authentifizierung am Git-Repository
-3.  Klonen des Repositories
-4.  Laden des PowerShell-Moduls
-5.  Aufruf des Client-Setups
-6.  Nutzung von `winget DSC` für passende Paketdefinitionen
+2.  Installation der für den Bootstrap benötigten PowerShell-Module
+3.  Authentifizierung am Git-Repository
+4.  Klonen des Repositories
+5.  Laden des PowerShell-Moduls
+6.  Aufruf des Client-Setups
+7.  Nutzung von `winget DSC` für passende Paketdefinitionen
 
 ------------------------------------------------------------------------
 
@@ -109,11 +113,13 @@ Nach dem Klonen des Repositories läuft der folgende Prozess:
 2.  Passendes Client-Profil wird geladen
 3.  Kategorien des Clients werden ermittelt
 4.  Konfigurationen der Kategorien werden zusammengeführt
-5.  Installer-Quellen und Shell-Profile werden aufgelöst
-6.  PowerShell-Profil und Oh-My-Posh-Konfiguration werden validiert
-7.  `winget DSC`-fähige Anwendungen werden deklarativ verarbeitet
-8.  ergänzende Quellen werden bei Bedarf über PowerShell-Hüllen behandelt
-9.  System wird überprüft oder konfiguriert
+5.  PowerShell-Repositories und optionale PowerShell-Module werden aufgelöst
+6.  Installer-Quellen und Shell-Profile werden aufgelöst
+7.  PowerShell-Profil und Oh-My-Posh-Konfiguration werden validiert
+8.  `winget DSC`-fähige Anwendungen werden deklarativ verarbeitet
+9.  PowerShell-Repositories werden als `Trusted` konfiguriert und optionale Module installiert
+10. ergänzende Quellen werden bei Bedarf über PowerShell-Hüllen behandelt
+11. System wird überprüft oder konfiguriert
 
 ------------------------------------------------------------------------
 
@@ -126,6 +132,8 @@ Report Mode überprüft den aktuellen Zustand des Systems.
 Geprüft werden:
 
 -   installierte Anwendungen
+-   konfigurierte PowerShell-Repositories
+-   installierte PowerShell-Module
 -   vorhandene Ordner
 -   vorhandene Konfigurationsdateien
 -   PowerShell-Profil
@@ -149,6 +157,9 @@ Enforce Mode stellt den gewünschten Zustand her.
 Aktionen:
 
 -   Installation fehlender Anwendungen
+-   Installation fehlender Bootstrap-PowerShell-Module
+-   Konfiguration deklarierter PowerShell-Repositories als `Trusted`
+-   Installation optionaler PowerShell-Module aus Kategorien
 -   Erstellung fehlender Ordner
 -   Synchronisation von Konfigurationsdateien
 -   Einrichtung des PowerShell-Profils
@@ -174,6 +185,7 @@ Das gesamte System basiert auf einem Git-Repository.
     ├─ Config
     │   ├─ Applications
     │   │   ├─ OhMyPosh
+    │   │   ├─ PowerShellModules
     │   │   ├─ WindowsTerminal
     │   │   ├─ PowerToys
     │   │   └─ PowerShell
@@ -251,6 +263,8 @@ Speicherort:
 Eine Kategorie kann definieren:
 
 -   Anwendungen
+-   PowerShell-Repositories
+-   optionale PowerShell-Module
 -   Ordner
 -   Konfigurationen
 -   ein referenziertes Oh-My-Posh-Profil
@@ -271,6 +285,18 @@ Beispiel:
       "Id": "Microsoft.VisualStudioCode"
     }
   ],
+  "PowerShellRepositories": [
+    {
+      "Name": "PSGallery",
+      "InstallationPolicy": "Trusted"
+    }
+  ],
+  "PowerShellModules": [
+    {
+      "Name": "posh-git",
+      "Repository": "PSGallery"
+    }
+  ],
   "Folders": [
     "C:\\Temp",
     "$env:USERPROFILE\\_Repos"
@@ -283,6 +309,11 @@ Mehrere Kategorien dürfen dasselbe Oh-My-Posh-Profil referenzieren.
 Falls mehrere aktive Kategorien unterschiedliche Oh-My-Posh-Profile
 definieren, entsteht ein Konflikt. Dieser Konflikt muss explizit im
 Client-Profil aufgelöst werden.
+
+PowerShell-Repositories dürfen in Kategorien definiert werden und werden
+auf dem Client als `Trusted` konfiguriert. Darüber hinaus können
+Kategorien optionale PowerShell-Module definieren, die nach Abschluss
+des Bootstrap-Grundaufbaus installiert werden.
 
 ------------------------------------------------------------------------
 
@@ -358,7 +389,52 @@ definiert ist, wird `winget` verwendet.
 
 ------------------------------------------------------------------------
 
-## 10. Folder Management
+## 10. PowerShell Module and Repository Management
+
+Für den Bootstrap benötigte PowerShell-Module werden auf dem Client immer
+zuerst installiert, bevor die eigentliche Client-Konfiguration ausgeführt
+wird.
+
+Zusätzlich können Kategorien optionale PowerShell-Module und
+PowerShell-Repositories definieren.
+
+Regeln:
+
+-   Bootstrap-PowerShell-Module sind verpflichtender Bestandteil des
+    Grundablaufs
+-   Kategorie-Module sind optional und werden nach der Grundinitialisierung
+    installiert
+-   deklarierte PowerShell-Repositories werden auf dem Client als
+    `Trusted` konfiguriert
+-   PowerShell-Module können optional einem bestimmten Repository
+    zugeordnet werden
+
+Beispiel:
+
+``` json
+{
+  "PowerShellRepositories": [
+    {
+      "Name": "PSGallery",
+      "InstallationPolicy": "Trusted"
+    }
+  ],
+  "PowerShellModules": [
+    {
+      "Name": "posh-git",
+      "Repository": "PSGallery"
+    },
+    {
+      "Name": "Terminal-Icons",
+      "Repository": "PSGallery"
+    }
+  ]
+}
+```
+
+------------------------------------------------------------------------
+
+## 11. Folder Management
 
 Ordner werden deklarativ definiert.
 
@@ -375,7 +451,7 @@ Fehlende Ordner werden im Enforce Mode automatisch erstellt.
 
 ------------------------------------------------------------------------
 
-## 11. Application Configuration
+## 12. Application Configuration
 
 Konfigurationen befinden sich unter:
 
@@ -408,11 +484,12 @@ Diese Konfigurationen werden während des Setup-Prozesses angewendet.
 
 ------------------------------------------------------------------------
 
-## 12. Technologies
+## 13. Technologies
 
   Technologie              Zweck
   ------------------------ ------------------------------
   PowerShell 7             Orchestrierung
+  PowerShellGet / PSResourceGet Verwaltung von Modulen und Repositories
   WinGet DSC               Deklarative Paketinstallation für Winget-Pakete
   Oh My Posh               Shell-Prompt und Profil-Darstellung
   Git                      Versionskontrolle
@@ -424,7 +501,7 @@ Diese Konfigurationen werden während des Setup-Prozesses angewendet.
 
 ------------------------------------------------------------------------
 
-## 13. Logging
+## 14. Logging
 
 Alle Aktionen werden protokolliert.
 
@@ -435,6 +512,8 @@ Das Logging enthält:
 
 -   installierte Anwendungen
 -   gewählte Installationsquelle je Anwendung
+-   konfigurierte PowerShell-Repositories
+-   installierte PowerShell-Module
 -   erkannte Abweichungen
 -   erkannte Shell-Profil-Konflikte
 -   ausgeführte Aktionen
@@ -442,7 +521,7 @@ Das Logging enthält:
 
 ------------------------------------------------------------------------
 
-## 14. Future Extensions
+## 15. Future Extensions
 
 Geplante Erweiterungen:
 
@@ -476,7 +555,7 @@ Synchronisation von:
 
 ------------------------------------------------------------------------
 
-## 15. Out of Scope (First Release)
+## 16. Out of Scope (First Release)
 
 Folgende Funktionen sind **nicht Teil der ersten Version**:
 
@@ -488,7 +567,7 @@ Folgende Funktionen sind **nicht Teil der ersten Version**:
 
 ------------------------------------------------------------------------
 
-## 16. Design Principles
+## 17. Design Principles
 
 ### Declarative Configuration
 
@@ -513,13 +592,19 @@ Applikationen gilt die Priorität `winget > choco > msi > exe`.
 Wenn möglich, sollen native deklarative Mechanismen bevorzugt werden. Für
 `winget`-basierte Anwendungen ist dies `winget DSC`.
 
+### Bootstrap First
+
+Die für den Bootstrap notwendigen PowerShell-Module werden immer zuerst
+installiert, damit der restliche Workflow auf einem definierten Fundament
+läuft.
+
 ### Extensibility
 
 Neue Installer-Typen können einfach hinzugefügt werden.
 
 ------------------------------------------------------------------------
 
-## 17. Success Criteria
+## 18. Success Criteria
 
 Das System gilt als erfolgreich implementiert wenn:
 
@@ -531,3 +616,5 @@ Das System gilt als erfolgreich implementiert wenn:
 -   PowerShell-Profil und Oh-My-Posh korrekt eingerichtet werden
 -   die priorisierte Quellenwahl bei Mehrfachdefinitionen nachvollziehbar funktioniert
 -   `winget`-Anwendungen deklarativ über `winget DSC` verarbeitet werden können
+-   deklarierte PowerShell-Repositories als `Trusted` konfiguriert werden können
+-   optionale PowerShell-Module aus Kategorien reproduzierbar installiert werden können

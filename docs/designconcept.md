@@ -12,6 +12,7 @@ Fokus von v1:
 - zwei Betriebsmodi: `Report` und `Enforce`
 - standardisiertes PowerShell-Profil
 - standardisierte Oh-My-Posh-Konfiguration
+- Bootstrap-PowerShell-Module als verpflichtende Grundlage
 
 Dieses Dokument beschreibt bewusst **Architektur, Regeln und Grenzen** und noch keine vollständige Implementierung.
 
@@ -46,6 +47,9 @@ Aktuelle Einschränkung:
 - Auflösen von Kategorien
 - Installation definierter Anwendungen
 - bevorzugte Nutzung von `winget DSC` für `winget`-basierte Anwendungen
+- Installation benötigter Bootstrap-PowerShell-Module
+- Konfiguration deklarierter PowerShell-Repositories als `Trusted`
+- Installation optionaler PowerShell-Module aus Kategorien
 - Erstellen definierter Ordner
 - Anwenden ausgewählter Konfigurationsdateien
 - Einrichtung des PowerShell-Profils
@@ -72,6 +76,10 @@ Aktuelle Einschränkung:
 ### Declarative first
 
 Konfiguration beschreibt den gewünschten Zustand. Logik interpretiert diese Daten.
+
+### Bootstrap foundation first
+
+Bootstrap-abhängige PowerShell-Module werden immer vor der eigentlichen Client-Konfiguration installiert.
 
 ### Idempotent execution
 
@@ -110,6 +118,7 @@ repo-root
 │   ├─ Applications
 │   │   ├─ OhMyPosh
 │   │   │   └─ Profiles
+│   │   ├─ PowerShellModules
 │   │   ├─ WindowsTerminal
 │   │   ├─ PowerShell
 │   │   │   ├─ Fragments
@@ -149,6 +158,7 @@ repo-root
 `bootstrap.ps1` übernimmt:
 
 - Vorbedingungen prüfen
+- Bootstrap-PowerShell-Module sicherstellen
 - Repository beschaffen oder aktualisieren
 - Modul laden
 - Zielmodus und Profil bestimmen
@@ -173,6 +183,14 @@ Die Paketverarbeitung wird in v1 zweigeteilt:
 - `winget DSC` als bevorzugter deklarativer Enforcement-Pfad für `winget`
 - PowerShell-Hüllen für `choco`, `msi` und `exe`, zunächst mit Fokus auf gemeinsame Verträge statt vollständiger Ausimplementierung
 
+#### PowerShell Ecosystem Layer
+
+PowerShell-Repositories und PowerShell-Module bilden eine eigene Konfigurationsdomäne:
+
+- verpflichtende Bootstrap-Module für den Grundablauf
+- optionale PowerShell-Module aus Kategorien
+- deklarative Repository-Definitionen mit `Trusted`-Policy
+
 #### Configuration Layer
 
 `Config/*` enthält ausschließlich deklarative Daten.
@@ -188,16 +206,18 @@ Vorgeschlagener logischer Ablauf:
 1. PowerShell-Version prüfen
 2. benötigte Basiswerkzeuge prüfen
 3. Zielrepository klonen oder aktualisieren
-4. Modul laden
-5. Profil bestimmen
-6. Kategorien auflösen
-7. Installer-Quellen und Shell-Konfiguration auflösen
-8. `winget`-Definitionen an `winget DSC` übergeben
-9. ergänzende Quellen über Hüllen vorbereiten oder ausführen
-10. Konfiguration validieren
-11. Sollzustand berechnen
-12. `Report` oder `Enforce` ausführen
-13. Ergebnis loggen und Exitcode setzen
+4. Bootstrap-PowerShell-Module installieren
+5. Modul laden
+6. Profil bestimmen
+7. Kategorien auflösen
+8. PowerShell-Repositories und optionale PowerShell-Module auflösen
+9. Installer-Quellen und Shell-Konfiguration auflösen
+10. `winget`-Definitionen an `winget DSC` übergeben
+11. ergänzende Quellen über Hüllen vorbereiten oder ausführen
+12. Konfiguration validieren
+13. Sollzustand berechnen
+14. `Report` oder `Enforce` ausführen
+15. Ergebnis loggen und Exitcode setzen
 
 ### 6.2 Betriebsmodi
 
@@ -205,12 +225,15 @@ Vorgeschlagener logischer Ablauf:
 
 - führt keine Änderungen durch
 - prüft Anwendungen, Ordner und Konfigurationen
+- prüft PowerShell-Repositories und optionale PowerShell-Module
 - prüft PowerShell-Profil und Oh-My-Posh-Auswahl
 - meldet `OK`, `MISSING`, `CONFLICT`, `ERROR`
 
 #### Enforce Mode
 
 - installiert fehlende Anwendungen
+- registriert deklarierte PowerShell-Repositories als `Trusted`
+- installiert optionale PowerShell-Module
 - erstellt fehlende Ordner
 - kopiert oder aktualisiert definierte Konfigurationsartefakte
 - erzeugt oder aktualisiert das wirksame PowerShell-Profil
@@ -277,13 +300,6 @@ Verbindliche Source-Priorität in v1:
 3. `msi`
 4. `exe`
 
-Beispiele:
-
-- gleiche Anwendung via `winget` und `choco` → `winget` wird wirksam
-- gleiche Anwendung nur via `msi` und `exe` → `msi` wird wirksam
-- gleiche `Name`-Definition mit zwei unterschiedlichen `winget`-Einträgen → `CONFLICT`
-- unterschiedliche Silent-Argumente innerhalb der wirksamen Definition → `CONFLICT`
-
 ### 8.3 Ordner
 
 Ordner werden als Menge behandelt.
@@ -305,7 +321,22 @@ Regeln für v1:
 
 Für v1 wird bewusst **kein inhaltliches Dateimerge** vorgesehen.
 
-### 8.5 PowerShell- und Oh-My-Posh-Konfiguration
+### 8.5 PowerShell-Repositories und Module
+
+PowerShell-Repositories und PowerShell-Module werden additiv zusammengeführt.
+
+Regeln:
+
+- Bootstrap-Module sind nicht optional und werden vor allen Kategorien verarbeitet
+- Kategorien dürfen zusätzliche `PowerShellRepositories` definieren
+- deklarierte Repositories werden auf dem Client als `Trusted` konfiguriert
+- Kategorien dürfen optionale `PowerShellModules` definieren
+- PowerShell-Module können optional einem Repository zugeordnet werden
+- identische Repository-Definitionen werden dedupliziert
+- widersprüchliche Repository-Definitionen erzeugen `CONFLICT`
+- identische Moduldefinitionen werden dedupliziert
+
+### 8.6 PowerShell- und Oh-My-Posh-Konfiguration
 
 Das PowerShell-Profil ist ein zentrales Zielartefakt von v1.
 
@@ -318,11 +349,13 @@ Regeln:
 - mehrere unterschiedliche aktive `OhMyPoshProfile`-Referenzen erzeugen `CONFLICT`
 - dieser Konflikt wird nicht automatisch aufgelöst, sondern explizit im Client-Profil entschieden
 
-### 8.6 Verhältnis von Client-Profil und Kategorien
+### 8.7 Verhältnis von Client-Profil und Kategorien
 
 Client-Profile dienen in v1 primär zur Auswahl von Kategorien.
 
 Direkte inhaltliche Overrides im Client-Profil sollen möglichst klein gehalten werden. Falls sie eingeführt werden, müssen sie explizit markiert und validiert werden.
+
+Bootstrap-Module werden nicht im Client-Profil definiert, sondern zentral vom System vorgegeben.
 
 ---
 
@@ -361,6 +394,18 @@ Beispiel:
       "Id": "Microsoft.VisualStudioCode"
     }
   ],
+  "PowerShellRepositories": [
+    {
+      "Name": "PSGallery",
+      "InstallationPolicy": "Trusted"
+    }
+  ],
+  "PowerShellModules": [
+    {
+      "Name": "posh-git",
+      "Repository": "PSGallery"
+    }
+  ],
   "Folders": [
     "C:\\Temp",
     "$env:USERPROFILE\\_Repos"
@@ -386,6 +431,8 @@ Das betrifft insbesondere:
 - erlaubte Werte für `Source`
 - eindeutige Identifikation von Anwendungen
 - Pflichtfeld `Name` für die quellenübergreifende Auflösung
+- eindeutige Identifikation von PowerShell-Repositories
+- gültige Modulnamen und optionale Repository-Zuordnung
 - gültige Zielpfade für Konfigurationen
 
 ---
@@ -462,11 +509,47 @@ Nicht Ziel von v1:
 
 ---
 
-## 11. PowerShell- und Oh-My-Posh-Konfiguration
+## 11. PowerShell Repository- und Modul-Strategie
+
+PowerShell-Repositories und PowerShell-Module werden getrennt von klassischen Applikationsquellen behandelt.
+
+### 11.1 Bootstrap-Module
+
+Für den Bootstrap notwendige PowerShell-Module werden immer zuerst installiert.
+
+Ziel:
+
+- definierte Laufzeitbasis
+- reproduzierbarer Bootstrap-Ablauf
+- keine implizite Abhängigkeit von bereits vorhandenen Client-Modulen
+
+### 11.2 Kategorie-Module
+
+Kategorien dürfen optionale PowerShell-Module deklarieren.
+
+Regeln:
+
+- Installation nach erfolgreicher Bootstrap-Grundinitialisierung
+- deklarativ über Name und optionales Repository
+- idempotente Behandlung bereits installierter Module
+
+### 11.3 Repositories
+
+Kategorien dürfen PowerShell-Repositories definieren.
+
+Regeln:
+
+- Repositories werden vor optionalen Kategorie-Modulen verarbeitet
+- deklarierte Repositories werden als `Trusted` konfiguriert
+- widersprüchliche Definitionen desselben Repository-Namens sind nicht zulässig
+
+---
+
+## 12. PowerShell- und Oh-My-Posh-Konfiguration
 
 PowerShell-Profil und Oh My Posh sind zentrale Bestandteile von v1.
 
-### 11.1 PowerShell-Profil
+### 12.1 PowerShell-Profil
 
 Das finale `Microsoft.PowerShell_profile.ps1` wird als wirksames Zielartefakt behandelt.
 
@@ -477,7 +560,7 @@ V1-Regeln:
 - das finale Profil wird aus Basisprofil plus aktiven Fragmenten erzeugt
 - die Erzeugung ist deterministisch und idempotent
 
-### 11.2 Oh My Posh
+### 12.2 Oh My Posh
 
 Oh My Posh wird über explizit referenzierte Profile oder Themes unter `Config/Applications/OhMyPosh/Profiles` verwaltet.
 
@@ -488,7 +571,7 @@ V1-Regeln:
 - mehrere unterschiedliche aktive Profile ergeben `CONFLICT`
 - das Client-Profil kann diesen Konflikt explizit auflösen
 
-### 11.3 Reporting
+### 12.3 Reporting
 
 `Report Mode` muss sichtbar machen:
 
@@ -498,7 +581,7 @@ V1-Regeln:
 
 ---
 
-## 12. Anwendungs-Konfigurationen
+## 13. Anwendungs-Konfigurationen
 
 Konfigurationen unter `Config/Applications/*` werden nicht direkt "magisch" erkannt, sondern über deklarative Referenzen aus Kategorien eingebunden.
 
@@ -517,13 +600,13 @@ V1-Regeln:
 
 ---
 
-## 13. Windows Sandbox und Debug-Modus
+## 14. Windows Sandbox und Debug-Modus
 
-### 12.1 Ziel
+### 14.1 Ziel
 
 Die Sandbox soll als schneller Testpfad für Bootstrap und Konfigurationslogik dienen.
 
-### 12.2 Anforderungen
+### 14.2 Anforderungen
 
 Für die Sandbox wird ein eigenes Profil empfohlen:
 
@@ -533,22 +616,22 @@ Für die Sandbox wird ein eigenes Profil empfohlen:
 - ausführliches Logging
 - möglichst wenig interaktive Schritte
 
-### 12.3 Besondere Einschränkungen
+### 14.3 Besondere Einschränkungen
 
 - Sandbox ist flüchtig
 - persistente Credentials sind nur eingeschränkt sinnvoll
 - Hostname ist kein verlässlicher Primärschlüssel
 - lokale Benutzerdaten und Sync-Szenarien sind nur begrenzt relevant
 
-### 12.4 Designentscheidung
+### 14.4 Designentscheidung
 
 Der Bootstrap muss explizit einen Sandbox-/Debug-Pfad unterstützen, statt Sandbox implizit aus dem Hostnamen abzuleiten.
 
 ---
 
-## 14. Logging und Exitcodes
+## 15. Logging und Exitcodes
 
-### 13.1 Logging-Ziele
+### 15.1 Logging-Ziele
 
 Das Logging soll sowohl menschenlesbar als auch maschinenfreundlich sein.
 
@@ -559,13 +642,15 @@ Minimalanforderungen:
 - Profilname
 - geladene Kategorien
 - gewählte Installationsquelle je Anwendung
+- konfigurierte PowerShell-Repositories
+- installierte Bootstrap- und Kategorie-Module
 - wirksames PowerShell-Profil
 - wirksames Oh-My-Posh-Profil
 - erkannte Abweichungen
 - ausgeführte Aktionen
 - Fehler und Abbruchgründe
 
-### 13.2 Statusklassen
+### 15.2 Statusklassen
 
 Empfohlene Statuswerte:
 
@@ -576,7 +661,7 @@ Empfohlene Statuswerte:
 - `CONFLICT`
 - `ERROR`
 
-### 13.3 Exitcodes
+### 15.3 Exitcodes
 
 Vorschlag für v1:
 
@@ -587,11 +672,11 @@ Vorschlag für v1:
 
 ---
 
-## 15. Sicherheit
+## 16. Sicherheit
 
 Die Sicherheitsanforderung für den Bootstrap ist noch offen. Daher wird sie als Architekturentscheidung dokumentiert.
 
-### 14.1 Mindestanforderung für v1
+### 16.1 Mindestanforderung für v1
 
 Mindestens vorgesehen werden sollten:
 
@@ -600,7 +685,7 @@ Mindestens vorgesehen werden sollten:
 - saubere Behandlung von Credentials
 - keine Ablage sensibler Daten im Repository
 
-### 14.2 Offene Entscheidung
+### 16.2 Offene Entscheidung
 
 Noch zu klären:
 
@@ -611,11 +696,11 @@ Bis zur finalen Entscheidung sollte das Design keine unsichere Default-Annahme f
 
 ---
 
-## 16. Validierung vor Ausführung
+## 17. Validierung vor Ausführung
 
 Obwohl formale Validation im PRD als spätere Erweiterung auftaucht, sollte bereits v1 eine minimale Vorabprüfung besitzen.
 
-### 15.1 Zu prüfen
+### 17.1 Zu prüfen
 
 - existieren referenzierte Kategorien
 - existieren referenzierte Konfigurationsquellen
@@ -626,14 +711,16 @@ Obwohl formale Validation im PRD als spätere Erweiterung auftaucht, sollte bere
 - gibt es mehrere Writer für dieselbe Zieldatei
 - sind `winget`-Definitionen `winget DSC`-fähig modelliert
 - besitzen `choco`, `msi` und `exe` mindestens die für die Hülle erforderlichen Pflichtinformationen
+- sind deklarierte PowerShell-Repositories eindeutig und vollständig
+- besitzen optionale PowerShell-Module gültige Namen und ggf. gültige Repository-Verweise
 
-### 15.2 Verhalten
+### 17.2 Verhalten
 
 Bei Validierungsfehlern wird nicht teilweise ausgeführt, sondern vor dem eigentlichen Setup abgebrochen.
 
 ---
 
-## 17. Risiken
+## 18. Risiken
 
 ### Technische Risiken
 
@@ -654,15 +741,17 @@ Bei Validierungsfehlern wird nicht teilweise ausgeführt, sondern vor dem eigent
 - fehlende Ownership für Konfigurationsdateien
 - spätes Einführen von Validierung erzeugt instabile Datenqualität
 - unklare Shell-Profil-Verantwortung zwischen Kategorien
+- widersprüchliche Repository-Definitionen für PowerShell-Module
 
 ---
 
-## 18. Empfohlene Umsetzungsreihenfolge
+## 19. Empfohlene Umsetzungsreihenfolge
 
 ### Phase 1
 
 - `bootstrap.ps1`
 - Modulgrundgerüst
+- Bootstrap-PowerShell-Module
 - Profilauflösung
 - Basis-PowerShell-Profil
 - Oh-My-Posh-Integration
@@ -674,6 +763,8 @@ Bei Validierungsfehlern wird nicht teilweise ausgeführt, sondern vor dem eigent
 
 - `Enforce Mode`
 - Logging und Exitcodes
+- PowerShell-Repositories als `Trusted`
+- optionale Kategorie-Module
 - Konfigurationsanwendung für einfache Dateien
 - Sandbox-Debug-Profil
 - kategoriespezifische PowerShell-Fragmente
@@ -694,7 +785,7 @@ Bei Validierungsfehlern wird nicht teilweise ausgeführt, sondern vor dem eigent
 
 ---
 
-## 19. Offene Entscheidungen
+## 20. Offene Entscheidungen
 
 Folgende Punkte sind noch nicht final festgelegt:
 
@@ -704,10 +795,11 @@ Folgende Punkte sind noch nicht final festgelegt:
 4. ob Client-Profile künftig weitere direkte Overrides enthalten dürfen
 5. ob später partielle Dateimerges unterstützt werden sollen
 6. wie stark `Report Mode` direkt auf `winget DSC`-Ressourcen gegenüber zusätzlicher eigener Auswertung setzen soll
+7. ob für PowerShell-Module langfristig `PSResourceGet` oder klassische `PowerShellGet`-Befehle bevorzugt werden
 
 ---
 
-## 20. Fazit
+## 21. Fazit
 
 Das Vorhaben ist für Windows technisch gut umsetzbar und das PRD liefert bereits eine tragfähige Grundrichtung.
 
@@ -718,4 +810,4 @@ Für eine robuste erste Version müssen jedoch vier Entscheidungen früh festgez
 - minimale Validierung vor Ausführung
 - definierte Sicherheitsbasis für den Bootstrap
 
-Mit diesen Leitplanken kann das Repository schrittweise vom PRD zu einer belastbaren v1-Architektur weiterentwickelt werden.
+Zusätzlich muss der Bootstrap die für sich selbst benötigten PowerShell-Module immer zuerst sicherstellen, bevor kategorieabhängige optionale Module verarbeitet werden.
