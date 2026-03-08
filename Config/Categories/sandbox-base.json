@@ -1,0 +1,16 @@
+{
+  "Applications": [
+    {
+      "Name": "Git",
+      "Source": "winget",
+      "Id": "Git.Git"
+    }
+  ],
+  "Folders": [
+    "$env:USERPROFILE\\Sandbox"
+  ],
+  "Configurations": [],
+  "PowerShellProfileFragments": [
+    "Config/Applications/PowerShell/Fragments/sandbox.ps1"
+  ]
+}

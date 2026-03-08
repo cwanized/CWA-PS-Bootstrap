@@ -1,0 +1,17 @@
+{
+  "Applications": [
+    {
+      "Name": "Windows Terminal",
+      "Source": "winget",
+      "Id": "Microsoft.WindowsTerminal"
+    }
+  ],
+  "Folders": [
+    "$env:USERPROFILE\\Documents\\PowerShell"
+  ],
+  "Configurations": [],
+  "PowerShellProfileFragments": [
+    "Config/Applications/PowerShell/Fragments/terminal.ps1"
+  ],
+  "OhMyPoshProfile": "coding-minimal"
+}

@@ -1,0 +1,26 @@
+{
+  "Applications": [
+    {
+      "Name": "Git",
+      "Source": "winget",
+      "Id": "Git.Git"
+    },
+    {
+      "Name": "Oh My Posh",
+      "Source": "winget",
+      "Id": "JanDeDobbeleer.OhMyPosh"
+    },
+    {
+      "Name": "Visual Studio Code",
+      "Source": "winget",
+      "Id": "Microsoft.VisualStudioCode"
+    }
+  ],
+  "Folders": [
+    "$env:USERPROFILE\\_Repos"
+  ],
+  "Configurations": [],
+  "PowerShellProfileFragments": [
+    "Config/Applications/PowerShell/Fragments/dev-tools.ps1"
+  ]
+}
