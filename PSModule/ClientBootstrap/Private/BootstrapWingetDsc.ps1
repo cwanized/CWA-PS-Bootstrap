@@ -38,6 +38,7 @@ function Get-PwshExecutablePath {
 }
 
 function Get-WingetDscModule {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', '', Justification = 'Suppresses stale analyzer diagnostics from a previous helper name for the same responsibility.')]
     [CmdletBinding()]
     param(
         [string]$LogPath,

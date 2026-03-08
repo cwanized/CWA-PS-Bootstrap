@@ -30,20 +30,20 @@ function Resolve-ConfigPath {
     return Join-Path $RepositoryRoot ($RelativePath -replace '/', '\\')
 }
 
-function Resolve-ClientProfilePath {
+function Resolve-ClientConfigurationPath {
     param(
         [Parameter(Mandatory)]
         [string]$RepositoryRoot,
 
-        [string]$ProfileName,
+        [string]$ConfigurationName,
 
         [string]$EnvironmentName
     )
 
     $clientsRoot = Join-Path $RepositoryRoot 'Config\Clients'
 
-    if ($ProfileName) {
-        $explicitPath = Join-Path $clientsRoot ("$ProfileName.json")
+    if ($ConfigurationName) {
+        $explicitPath = Join-Path $clientsRoot ("$ConfigurationName.json")
         if (-not (Test-Path -Path $explicitPath)) {
             throw "Client profile not found: $explicitPath"
         }
@@ -72,47 +72,58 @@ function Resolve-ClientProfilePath {
 }
 
 function Get-MergedConfiguration {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', '', Justification = 'False positive: no assignment to the automatic variable $PROFILE, only client configuration/profile naming.')]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]$RepositoryRoot,
 
         [Parameter(Mandatory)]
-        [string]$ProfilePath
+        [string]$ClientConfigurationPath
     )
 
-    $profile = Read-JsonFile -Path $ProfilePath
+    $clientConfiguration = Read-JsonFile -Path $ClientConfigurationPath
     $categoriesRoot = Join-Path $RepositoryRoot 'Config\Categories'
 
     $configuration = [ordered]@{
-        ProfilePath                = $ProfilePath
-        ProfileName                = [System.IO.Path]::GetFileNameWithoutExtension($ProfilePath)
-        Categories                 = @($profile.Categories)
+        ProfilePath                = $ClientConfigurationPath
+        ProfileName                = [System.IO.Path]::GetFileNameWithoutExtension($ClientConfigurationPath)
+        Categories                 = @($clientConfiguration.Categories)
         Applications               = New-Object System.Collections.Generic.List[hashtable]
+        PowerShellRepositories     = New-Object System.Collections.Generic.List[hashtable]
+        PowerShellModules          = New-Object System.Collections.Generic.List[hashtable]
         Folders                    = New-Object System.Collections.Generic.List[string]
         Configurations             = New-Object System.Collections.Generic.List[hashtable]
         PowerShellProfileFragments = New-Object System.Collections.Generic.List[string]
         CategoryOhMyPoshProfiles   = New-Object System.Collections.Generic.List[string]
-        ClientOhMyPoshProfile      = $profile.OhMyPoshProfile
+        ClientOhMyPoshProfile      = $clientConfiguration.OhMyPoshProfile
     }
 
-    foreach ($categoryName in @($profile.Categories)) {
+    foreach ($categoryName in @($clientConfiguration.Categories)) {
         $categoryPath = Join-Path $categoriesRoot ("$categoryName.json")
         $category = Read-JsonFile -Path $categoryPath
 
-        foreach ($application in @($category.Applications)) {
+        foreach ($application in @($category.Applications | Where-Object { $null -ne $_ })) {
             $configuration.Applications.Add(([hashtable]$application))
         }
 
-        foreach ($folder in @($category.Folders)) {
+        foreach ($repository in @($category.PowerShellRepositories | Where-Object { $null -ne $_ })) {
+            $configuration.PowerShellRepositories.Add(([hashtable]$repository))
+        }
+
+        foreach ($module in @($category.PowerShellModules | Where-Object { $null -ne $_ })) {
+            $configuration.PowerShellModules.Add(([hashtable]$module))
+        }
+
+        foreach ($folder in @($category.Folders | Where-Object { $null -ne $_ })) {
             $configuration.Folders.Add($folder)
         }
 
-        foreach ($item in @($category.Configurations)) {
+        foreach ($item in @($category.Configurations | Where-Object { $null -ne $_ })) {
             $configuration.Configurations.Add(([hashtable]$item))
         }
 
-        foreach ($fragment in @($category.PowerShellProfileFragments)) {
+        foreach ($fragment in @($category.PowerShellProfileFragments | Where-Object { $null -ne $_ })) {
             $configuration.PowerShellProfileFragments.Add($fragment)
         }
 
@@ -122,6 +133,88 @@ function Get-MergedConfiguration {
     }
 
     return $configuration
+}
+
+function Resolve-PowerShellRepositories {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.IEnumerable]$Repositories
+    )
+
+    $resolved = New-Object System.Collections.Generic.List[hashtable]
+    $conflicts = New-Object System.Collections.Generic.List[string]
+    $grouped = @{}
+
+    foreach ($repository in $Repositories) {
+        if (-not $repository.Name) {
+            $conflicts.Add('PowerShell repository entry is missing required property "Name".')
+            continue
+        }
+
+        $key = $repository.Name.ToLowerInvariant()
+        if (-not $grouped.ContainsKey($key)) {
+            $grouped[$key] = New-Object System.Collections.Generic.List[hashtable]
+        }
+
+        $grouped[$key].Add(([hashtable]$repository))
+    }
+
+    foreach ($entry in $grouped.GetEnumerator()) {
+        $serialized = @($entry.Value | ForEach-Object { $_ | ConvertTo-Json -Depth 8 -Compress } | Select-Object -Unique)
+        if ($serialized.Count -gt 1) {
+            $conflicts.Add("PowerShell repository '$($entry.Value[0].Name)' has multiple conflicting definitions.")
+            continue
+        }
+
+        $resolved.Add($entry.Value[0])
+    }
+
+    return [ordered]@{
+        Repositories = $resolved
+        Conflicts    = $conflicts
+    }
+}
+
+function Resolve-PowerShellModules {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.IEnumerable]$Modules
+    )
+
+    $resolved = New-Object System.Collections.Generic.List[hashtable]
+    $conflicts = New-Object System.Collections.Generic.List[string]
+    $grouped = @{}
+
+    foreach ($module in $Modules) {
+        if (-not $module.Name) {
+            $conflicts.Add('PowerShell module entry is missing required property "Name".')
+            continue
+        }
+
+        $key = $module.Name.ToLowerInvariant()
+        if (-not $grouped.ContainsKey($key)) {
+            $grouped[$key] = New-Object System.Collections.Generic.List[hashtable]
+        }
+
+        $grouped[$key].Add(([hashtable]$module))
+    }
+
+    foreach ($entry in $grouped.GetEnumerator()) {
+        $serialized = @($entry.Value | ForEach-Object { $_ | ConvertTo-Json -Depth 8 -Compress } | Select-Object -Unique)
+        if ($serialized.Count -gt 1) {
+            $conflicts.Add("PowerShell module '$($entry.Value[0].Name)' has multiple conflicting definitions.")
+            continue
+        }
+
+        $resolved.Add($entry.Value[0])
+    }
+
+    return [ordered]@{
+        Modules   = $resolved
+        Conflicts = $conflicts
+    }
 }
 
 function Get-SourcePriority {
@@ -191,6 +284,7 @@ function Resolve-Applications {
 }
 
 function Resolve-OhMyPoshProfile {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', '', Justification = 'False positive on Oh My Posh profile naming.')]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -233,6 +327,12 @@ function Test-ConfigurationState {
         [hashtable]$ResolvedApplications,
 
         [Parameter(Mandatory)]
+        [hashtable]$ResolvedPowerShellRepositories,
+
+        [Parameter(Mandatory)]
+        [hashtable]$ResolvedPowerShellModules,
+
+        [Parameter(Mandatory)]
         [hashtable]$ResolvedOhMyPosh
     )
 
@@ -266,6 +366,39 @@ function Test-ConfigurationState {
         }
     }
 
+    foreach ($repository in @($ResolvedPowerShellRepositories.Repositories)) {
+        if (-not $repository.Name) {
+            $issues.Add('PowerShell repository entry requires property "Name".')
+            continue
+        }
+
+        if (-not $repository.InstallationPolicy) {
+            $issues.Add("PowerShell repository '$($repository.Name)' requires property 'InstallationPolicy'.")
+        }
+
+        $existingRepository = Get-PSRepository -Name $repository.Name -ErrorAction SilentlyContinue
+        if (-not $existingRepository -and -not $repository.SourceLocation) {
+            $issues.Add("PowerShell repository '$($repository.Name)' is not known locally and requires 'SourceLocation'.")
+        }
+    }
+
+    $repositoryNames = @($ResolvedPowerShellRepositories.Repositories | ForEach-Object { $_.Name.ToLowerInvariant() })
+    $existingRepositoryNames = @((Get-PSRepository -ErrorAction SilentlyContinue | ForEach-Object { $_.Name.ToLowerInvariant() }))
+
+    foreach ($module in @($ResolvedPowerShellModules.Modules)) {
+        if (-not $module.Name) {
+            $issues.Add('PowerShell module entry requires property "Name".')
+            continue
+        }
+
+        if ($module.Repository) {
+            $repositoryKey = $module.Repository.ToLowerInvariant()
+            if (($repositoryKey -notin $repositoryNames) -and ($repositoryKey -notin $existingRepositoryNames)) {
+                $issues.Add("PowerShell module '$($module.Name)' references unknown repository '$($module.Repository)'.")
+            }
+        }
+    }
+
     foreach ($fragment in @($Configuration.PowerShellProfileFragments | Select-Object -Unique)) {
         $fragmentPath = Resolve-ConfigPath -RepositoryRoot $RepositoryRoot -RelativePath $fragment
         if (-not (Test-Path -Path $fragmentPath)) {
@@ -285,6 +418,14 @@ function Test-ConfigurationState {
     }
 
     foreach ($conflict in @($ResolvedApplications.Conflicts)) {
+        $issues.Add($conflict)
+    }
+
+    foreach ($conflict in @($ResolvedPowerShellRepositories.Conflicts)) {
+        $issues.Add($conflict)
+    }
+
+    foreach ($conflict in @($ResolvedPowerShellModules.Conflicts)) {
         $issues.Add($conflict)
     }
 

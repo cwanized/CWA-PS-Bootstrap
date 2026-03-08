@@ -1,4 +1,5 @@
 function Invoke-ClientBootstrap {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', '', Justification = 'False positive: client profile terminology is intentional and does not assign to $PROFILE.')]
     [CmdletBinding()]
     param(
         [ValidateSet('Report', 'Enforce')]
@@ -16,13 +17,15 @@ function Invoke-ClientBootstrap {
     try {
         Write-BootstrapLog -Path $logPath -Message ("Starting ClientBootstrap in mode '{0}'" -f $Mode)
 
-        $profilePath = Resolve-ClientProfilePath -RepositoryRoot $repositoryRoot -ProfileName $ConfigurationName -EnvironmentName $Environment
-        Write-BootstrapLog -Path $logPath -Message ("Using client profile {0}" -f $profilePath)
+        $clientConfigurationPath = Resolve-ClientConfigurationPath -RepositoryRoot $repositoryRoot -ConfigurationName $ConfigurationName -EnvironmentName $Environment
+        Write-BootstrapLog -Path $logPath -Message ("Using client profile {0}" -f $clientConfigurationPath)
 
-        $configuration = Get-MergedConfiguration -RepositoryRoot $repositoryRoot -ProfilePath $profilePath
+        $configuration = Get-MergedConfiguration -RepositoryRoot $repositoryRoot -ClientConfigurationPath $clientConfigurationPath
         $resolvedApplications = Resolve-Applications -Applications $configuration.Applications
+        $resolvedPowerShellRepositories = Resolve-PowerShellRepositories -Repositories $configuration.PowerShellRepositories
+        $resolvedPowerShellModules = Resolve-PowerShellModules -Modules $configuration.PowerShellModules
         $resolvedOhMyPosh = Resolve-OhMyPoshProfile -Configuration $configuration
-        $issues = Test-ConfigurationState -RepositoryRoot $repositoryRoot -Configuration $configuration -ResolvedApplications $resolvedApplications -ResolvedOhMyPosh $resolvedOhMyPosh
+        $issues = Test-ConfigurationState -RepositoryRoot $repositoryRoot -Configuration $configuration -ResolvedApplications $resolvedApplications -ResolvedPowerShellRepositories $resolvedPowerShellRepositories -ResolvedPowerShellModules $resolvedPowerShellModules -ResolvedOhMyPosh $resolvedOhMyPosh
 
         if ($issues.Count -gt 0) {
             foreach ($issue in $issues) {
@@ -33,16 +36,18 @@ function Invoke-ClientBootstrap {
         }
 
         Write-BootstrapLog -Path $logPath -Message ("Resolved {0} applications" -f $resolvedApplications.Applications.Count)
+        Write-BootstrapLog -Path $logPath -Message ("Resolved {0} PowerShell repositories" -f $resolvedPowerShellRepositories.Repositories.Count)
+        Write-BootstrapLog -Path $logPath -Message ("Resolved {0} PowerShell modules" -f $resolvedPowerShellModules.Modules.Count)
         if ($resolvedOhMyPosh.EffectiveProfile) {
             Write-BootstrapLog -Path $logPath -Message ("Resolved Oh My Posh profile {0}" -f $resolvedOhMyPosh.EffectiveProfile)
         }
 
         switch ($Mode) {
             'Report' {
-                Invoke-ReportMode -RepositoryRoot $repositoryRoot -Configuration $configuration -Applications $resolvedApplications.Applications -OhMyPoshProfile $resolvedOhMyPosh.EffectiveProfile -LogPath $logPath
+                Invoke-ReportMode -RepositoryRoot $repositoryRoot -Configuration $configuration -Applications $resolvedApplications.Applications -PowerShellRepositories $resolvedPowerShellRepositories.Repositories -PowerShellModules $resolvedPowerShellModules.Modules -OhMyPoshProfile $resolvedOhMyPosh.EffectiveProfile -LogPath $logPath
             }
             'Enforce' {
-                Invoke-EnforceMode -RepositoryRoot $repositoryRoot -Configuration $configuration -Applications $resolvedApplications.Applications -OhMyPoshProfile $resolvedOhMyPosh.EffectiveProfile -LogPath $logPath
+                Invoke-EnforceMode -RepositoryRoot $repositoryRoot -Configuration $configuration -Applications $resolvedApplications.Applications -PowerShellRepositories $resolvedPowerShellRepositories.Repositories -PowerShellModules $resolvedPowerShellModules.Modules -OhMyPoshProfile $resolvedOhMyPosh.EffectiveProfile -LogPath $logPath
             }
         }
 
@@ -50,10 +55,11 @@ function Invoke-ClientBootstrap {
 
         return [pscustomobject]@{
             LogPath           = $logPath
-            ProfilePath       = $profilePath
+            ProfilePath       = $clientConfigurationPath
             EffectiveMode     = $Mode
             EffectiveOhMyPosh = $resolvedOhMyPosh.EffectiveProfile
             ApplicationCount  = $resolvedApplications.Applications.Count
+            ModuleCount       = $resolvedPowerShellModules.Modules.Count
         }
     }
     catch {

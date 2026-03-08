@@ -19,6 +19,22 @@
   "Folders": [
     "$env:USERPROFILE\\_Repos"
   ],
+  "PowerShellRepositories": [
+    {
+      "Name": "PSGallery",
+      "InstallationPolicy": "Trusted"
+    }
+  ],
+  "PowerShellModules": [
+    {
+      "Name": "posh-git",
+      "Repository": "PSGallery"
+    },
+    {
+      "Name": "Terminal-Icons",
+      "Repository": "PSGallery"
+    }
+  ],
   "Configurations": [],
   "PowerShellProfileFragments": [
     "Config/Applications/PowerShell/Fragments/dev-tools.ps1"

@@ -50,6 +50,8 @@ function Test-ApplicationInstalled {
 }
 
 function Get-DesiredPowerShellProfileContent {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', '', Justification = 'False positive: PowerShell profile content generation does not assign to $PROFILE.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', '', Justification = 'False positive: stale diagnostic references removed helper Ensure-WingetDscModule.')]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -88,8 +90,8 @@ function Get-DesiredPowerShellProfileContent {
     }
 
     if ($OhMyPoshProfile) {
-        $profilePath = Join-Path $RepositoryRoot ("Config\Applications\OhMyPosh\Profiles\$OhMyPoshProfile.omp.json")
-        $escapedProfilePath = $profilePath.Replace("'", "''")
+        $ohMyPoshConfigPath = Join-Path $RepositoryRoot ("Config\Applications\OhMyPosh\Profiles\$OhMyPoshProfile.omp.json")
+        $escapedProfilePath = $ohMyPoshConfigPath.Replace("'", "''")
         $lines.Add('if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {')
         $lines.Add("    oh-my-posh init pwsh --config '$escapedProfilePath' | Invoke-Expression")
         $lines.Add('}')
@@ -161,6 +163,7 @@ function Invoke-WrapperPackageOperation {
 }
 
 function Invoke-ReportMode {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', '', Justification = 'False positive on profile-related parameter names in reporting.')]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -171,6 +174,12 @@ function Invoke-ReportMode {
 
         [Parameter(Mandatory)]
         [System.Collections.IEnumerable]$Applications,
+
+        [Parameter(Mandatory)]
+        [System.Collections.IEnumerable]$PowerShellRepositories,
+
+        [Parameter(Mandatory)]
+        [System.Collections.IEnumerable]$PowerShellModules,
 
         [string]$OhMyPoshProfile,
 
@@ -184,6 +193,9 @@ function Invoke-ReportMode {
         $message = '{0} application {1} via {2}' -f $status, $application.Name, $application.Source
         Write-BootstrapLog -Path $LogPath -Level ($(if ($installed) { 'OK' } else { 'WARN' })) -Message $message
     }
+
+    Invoke-ReportPowerShellRepositories -Repositories $PowerShellRepositories -LogPath $LogPath
+    Invoke-ReportPowerShellModules -Modules $PowerShellModules -LogPath $LogPath
 
     foreach ($folder in @($Configuration.Folders | Select-Object -Unique)) {
         $expandedFolder = $ExecutionContext.InvokeCommand.ExpandString($folder)
@@ -211,6 +223,7 @@ function Invoke-ReportMode {
 }
 
 function Invoke-EnforceMode {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', '', Justification = 'False positive on profile-related parameter names in enforcement.')]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -221,6 +234,12 @@ function Invoke-EnforceMode {
 
         [Parameter(Mandatory)]
         [System.Collections.IEnumerable]$Applications,
+
+        [Parameter(Mandatory)]
+        [System.Collections.IEnumerable]$PowerShellRepositories,
+
+        [Parameter(Mandatory)]
+        [System.Collections.IEnumerable]$PowerShellModules,
 
         [string]$OhMyPoshProfile,
 
@@ -238,6 +257,9 @@ function Invoke-EnforceMode {
             Write-BootstrapLog -Path $LogPath -Level 'OK' -Message ("Folder already present {0}" -f $expandedFolder)
         }
     }
+
+    Invoke-EnforcePowerShellRepositories -Repositories $PowerShellRepositories -LogPath $LogPath
+    Invoke-EnforcePowerShellModules -Modules $PowerShellModules -LogPath $LogPath
 
     foreach ($application in $Applications) {
         if (Test-ApplicationInstalled -Application $application -LogPath $LogPath) {
