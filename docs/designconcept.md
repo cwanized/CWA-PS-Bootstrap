@@ -148,6 +148,8 @@ repo-root
 │   ├─ PRD.md
 │   └─ designconcept.md
 │
+├─ install.ps1
+│
 └─ bootstrap.ps1
 ```
 
@@ -155,15 +157,24 @@ repo-root
 
 #### Bootstrap Layer
 
+`install.ps1` übernimmt:
+
+- fehlende Basistools wie `git` und `pwsh` bei Bedarf automatisch installieren
+- Repository beschaffen oder aktualisieren
+- bei Bedarf GitHub-Authentifizierung indirekt über `git clone` oder `git pull` auslösen
+- an `bootstrap.ps1` im lokalen Checkout übergeben
+
 `bootstrap.ps1` übernimmt:
 
 - Vorbedingungen prüfen
-- Remote-Loader für `irm | iex` bereitstellen
 - Bootstrap-PowerShell-Module sicherstellen
-- Repository beschaffen oder aktualisieren
 - Modul laden
 - Zielmodus und Profil bestimmen
 - Setup auslösen
+
+Der primäre Einstieg in v1 ist ein öffentlicher Raw-Download von
+`install.ps1`, der danach lokal in den regulären Git-basierten Workflow
+übergeht.
 
 #### Orchestration Layer
 
@@ -205,22 +216,24 @@ PowerShell-Repositories und PowerShell-Module bilden eine eigene Konfigurationsd
 Vorgeschlagener logischer Ablauf:
 
 1. PowerShell-Version prüfen
-2. Remote-Loader per `irm | iex` laden
-3. benötigte Basiswerkzeuge prüfen
+2. Install-Loader starten
+3. fehlende Basistools wie `git` und `pwsh` automatisch installieren
 4. Zielrepository klonen oder aktualisieren
 5. GitHub-Authentifizierung bei Bedarf über Git Credential Manager durchführen
-6. Bootstrap-PowerShell-Module installieren
-7. Modul laden
-8. Profil bestimmen
-9. Kategorien auflösen
-10. PowerShell-Repositories und optionale PowerShell-Module auflösen
-11. Installer-Quellen und Shell-Konfiguration auflösen
-12. `winget`-Definitionen an `winget DSC` übergeben
-13. ergänzende Quellen über Hüllen vorbereiten oder ausführen
-14. Konfiguration validieren
-15. Sollzustand berechnen
-16. `Report` oder `Enforce` ausführen
-17. Ergebnis loggen und Exitcode setzen
+6. lokalen Repo-Bootstrap starten
+7. benötigte Basiswerkzeuge prüfen
+8. Bootstrap-PowerShell-Module installieren
+9. Modul laden
+10. Profil bestimmen
+11. Kategorien auflösen
+12. PowerShell-Repositories und optionale PowerShell-Module auflösen
+13. Installer-Quellen und Shell-Konfiguration auflösen
+14. `winget`-Definitionen an `winget DSC` übergeben
+15. ergänzende Quellen über Hüllen vorbereiten oder ausführen
+16. Konfiguration validieren
+17. Sollzustand berechnen
+18. `Report` oder `Enforce` ausführen
+19. Ergebnis loggen und Exitcode setzen
 
 ### 6.2 Betriebsmodi
 

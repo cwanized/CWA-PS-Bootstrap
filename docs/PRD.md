@@ -7,8 +7,8 @@
 Dieses Projekt definiert ein **Git-basiertes System zur automatisierten
 Einrichtung und Validierung von Windows-Clients**.
 
-Die gesamte Konfiguration eines Clients wird über ein **privates
-Git-Repository** verwaltet. Dadurch entsteht eine reproduzierbare,
+Die gesamte Konfiguration eines Clients wird über ein **Git-Repository**
+verwaltet. Dadurch entsteht eine reproduzierbare,
 versionskontrollierte und modular aufgebaute Clientkonfiguration.
 
 Das System soll sicherstellen, dass auf einem Client:
@@ -69,23 +69,31 @@ Die Lösung arbeitet in zwei Modi:
 Der Benutzer startet das Setup mit einem einzigen Befehl:
 
 ``` powershell
-irm https://raw.githubusercontent.com/cwanized/CWA-PS-Bootstrap/master/bootstrap.ps1 | iex
+irm https://raw.githubusercontent.com/cwanized/CWA-PS-Bootstrap/master/install.ps1 | iex
 ```
 
-Der Einzeiler lädt einen kleinen Bootstrap-Loader. Dieser Loader prüft
-die Grundvoraussetzungen, klont anschließend das Repository lokal und
-startet danach den eigentlichen Bootstrap aus dem Checkout.
+Der Einzeiler lädt den Install-Loader direkt von GitHub. Dieser Loader
+installiert bei Bedarf fehlende Voraussetzungen, klont oder aktualisiert
+das Repository lokal und startet anschließend den eigentlichen Bootstrap
+aus dem Checkout.
+
+Falls `git` oder `pwsh` auf dem Zielsystem noch nicht vorhanden sind,
+installiert `install.ps1` diese Voraussetzungen in v1 automatisch über
+`winget`.
+
+Die GitHub-Authentifizierung erfolgt beim `git clone` bzw. `git pull`
+über Git Credential Manager, sofern das Zielrepository oder spätere
+Erweiterungen einen authentifizierten Zugriff benötigen.
 
 Das Bootstrap-Skript übernimmt:
 
-1.  Laden eines kleinen Bootstrap-Loaders
-2.  Prüfung grundlegender Tools
-3.  Authentifizierung am Git-Repository
-4.  Klonen oder Aktualisieren des Repositories
-5.  Installation der für den Bootstrap benötigten PowerShell-Module
-6.  Laden des PowerShell-Moduls
-7.  Aufruf des Client-Setups
-8.  Nutzung von `winget DSC` für passende Paketdefinitionen
+1.  Prüfung grundlegender Tools
+2.  automatische Installation fehlender Werkzeuge wie `git` und `pwsh`
+3.  Klonen oder Aktualisieren des Repositories
+4.  Installation der für den Bootstrap benötigten PowerShell-Module
+5.  Laden des PowerShell-Moduls
+6.  Aufruf des Client-Setups
+7.  Nutzung von `winget DSC` für passende Paketdefinitionen
 
 ------------------------------------------------------------------------
 
@@ -207,6 +215,8 @@ Das gesamte System basiert auf einem Git-Repository.
     ├─ docs
     │   ├─ PRD.md
     │   └─ designconcept.md
+    │
+    ├─ install.ps1
     │
     └─ bootstrap.ps1
 
